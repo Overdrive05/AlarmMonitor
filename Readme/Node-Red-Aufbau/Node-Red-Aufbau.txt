@@ -1,0 +1,293 @@
+NODE-RED – ALARM-FLOW EINRICHTUNG
+
+
+
+ZUGRIFFSBESCHRÄNKUNG / SICHERHEIT
+
+Der Zugriff auf die Alarmdaten sowie die Einbindung in produktive Systeme erfordert eine entsprechende Freigabe.
+
+Der Zugriff erfolgt ausschließlich über autorisierte Systeme
+Es können zusätzliche Sicherheitsmechanismen wie VPN, Authentifizierung oder Zertifikate erforderlich sein
+Die notwendigen Zugangsdaten bzw. Zertifikate werden nicht öffentlich bereitgestellt
+
+Wichtiger Hinweis:
+Die benötigten Zertifikate sind personalisiert und müssen individuell erstellt werden. Eine eigenständige Nutzung ohne entsprechende Freigabe ist nicht vorgesehen.
+
+Bei Interesse oder Bedarf wenden Sie sich bitte an:
+
+t.schneider@feuerwehr-raunheim.de
+
+
+
+
+1. ZIEL
+   Dieser Flow stellt einen HTTP-Endpunkt bereit, über den ein externer Client (z. B. die Alarm-App) den aktuellen Alarmstatus abrufen kann.
+
+Endpunkt:
+http://SERVER-IP:1880/alarm-status
+
+---
+
+2. VORAUSSETZUNGEN
+
+* Laufender Node-RED Server
+* Zugriff auf Node-RED Editor
+* Eingehende Alarmdaten (z. B. MQTT, ioBroker, Node-RED Input)
+
+---
+
+3. GRUNDSTRUKTUR DES FLOWS
+
+Der Flow besteht aus zwei Hauptteilen:
+
+A) Alarm-Eingang (z. B. MQTT IN)
+B) HTTP-Ausgabe (/alarm-status)
+
+---
+
+4. ALARM-VERARBEITUNG
+
+Function Node (Alarm speichern):
+
+```javascript
+let text = msg.payload;
+
+let status = {
+    alarm: true,
+    text: text,
+    timestamp: new Date().toISOString()
+};
+
+global.set("alarmStatus", status);
+
+return msg;
+```
+
+---
+
+5. HTTP-ENDPUNKT
+
+Node:
+
+* http in
+
+Einstellungen:
+
+* Method: GET
+* URL: /alarm-status
+
+---
+
+6. STATUS AUSGEBEN
+
+Function Node:
+
+```javascript
+let status = global.get("alarmStatus");
+
+if (!status) {
+    status = {
+        alarm: false,
+        text: "",
+        timestamp: ""
+    };
+}
+
+let activeSeconds = 20;
+
+if (status.timestamp) {
+    let alarmTime = new Date(status.timestamp).getTime();
+    let nowTime = Date.now();
+    let diffSeconds = (nowTime - alarmTime) / 1000;
+
+    if (diffSeconds > activeSeconds) {
+        status = {
+            alarm: false,
+            text: "",
+            timestamp: status.timestamp
+        };
+    }
+}
+
+msg.payload = status;
+return msg;
+```
+
+---
+
+7. HTTP RESPONSE
+
+Verbindung:
+
+http in → function → http response
+
+---
+
+8. KONFIGURIERBARE PARAMETER
+
+Folgende Werte können individuell angepasst werden:
+
+---
+
+8.1 Alarmdauer
+
+```javascript
+let activeSeconds = 20;
+```
+
+Bedeutung:
+
+* Wie lange ein Alarm aktiv bleibt (in Sekunden)
+
+Beispiel:
+
+* 10 → kurzer Alarm
+* 60 → längere Anzeige
+
+---
+
+8.2 Alarmtext (msg.payload)
+
+```javascript
+let text = msg.payload;
+```
+
+Bedeutung:
+
+* Inhalt der Alarmmeldung (z. B. "F 1", "F 2", etc.)
+
+Anpassung:
+
+* Falls das Eingangssignal anders aufgebaut ist:
+
+```javascript
+let text = msg.payload.text;
+```
+
+oder
+
+```javascript
+let text = msg.payload.alarm;
+```
+
+---
+
+8.3 Eingangssignal (MQTT / ioBroker)
+
+Je nach System kann der Eingang variieren:
+
+Beispiele:
+
+MQTT:
+
+* Topic frei wählbar
+* Payload = Alarmtext
+
+ioBroker:
+
+* Datenpunkt → String-Wert
+
+---
+
+8.4 HTTP-Endpunkt
+
+Node:
+
+* http in
+
+Einstellung:
+
+```text
+/alarm-status
+```
+
+Anpassbar zu:
+
+```text
+/alarm
+/status
+/api/alarm
+```
+
+WICHTIG:
+Client muss die gleiche URL verwenden.
+
+---
+
+8.5 Globaler Speichername
+
+```javascript
+global.set("alarmStatus", status);
+```
+
+und
+
+```javascript
+global.get("alarmStatus");
+```
+
+Kann geändert werden, z. B.:
+
+```javascript
+global.set("fireAlarm", status);
+```
+
+WICHTIG:
+Name muss in beiden Function Nodes identisch sein.
+
+---
+
+8.6 Zeitformat
+
+```javascript
+timestamp: new Date().toISOString()
+```
+
+Alternativen:
+
+```javascript
+timestamp: new Date().toLocaleString()
+```
+
+oder eigenes Format.
+
+---
+
+9. ERGEBNIS
+
+Browser-Aufruf:
+
+http://SERVER-IP:1880/alarm-status
+
+Antwort:
+
+```json
+{
+  "alarm": true,
+  "text": "F 1",
+  "timestamp": "2026-04-10T12:00:00Z"
+}
+```
+
+---
+
+10. TEST
+
+11. Alarm manuell auslösen (Inject Node)
+
+12. Browser öffnen
+
+13. JSON prüfen
+
+---
+
+11. HINWEISE
+
+* Kein zusätzlicher Timer erforderlich
+* Funktioniert auch über VPN (z. B. WireGuard)
+* Sehr geringe Systemlast
+* Robust gegen Verbindungsabbrüche
+
+---
+
+END OF DOCUMENT

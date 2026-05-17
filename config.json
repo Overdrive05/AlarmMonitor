@@ -1,0 +1,30 @@
+{
+  "app_title": "Alarm Monitor",
+  "alarm": {
+    "server_url": "http://123.456.7.89:1880/alarm-status",
+    "check_interval": 3,
+    "sound_enabled": true,
+    "monitoring_enabled": true,
+    "sound_file": "alarm.wav"
+  },
+  "weather": {
+    "location_name": "Raunheim",
+    "use_coordinates_directly": false,
+    "latitude": 50.0136,
+    "longitude": 8.4519,
+    "timezone": "Europe/Berlin",
+    "update_interval": 600
+  },
+  "map": {
+    "image_url": "https://www.dwd.de/DWD/warnungen/warnapp_gemeinden/json/warnungen_gemeinde_map_hes.png",
+    "update_interval": 600,
+    "max_width": 900,
+    "max_height": 650
+  },
+  "ui": {
+    "appearance_mode": "dark",
+    "color_theme": "blue",
+    "crest_file": "Icon_oben_rechts.png",
+    "clock_font_family": "Arial"
+  }
+}
