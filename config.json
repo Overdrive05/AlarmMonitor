@@ -1,7 +1,7 @@
 {
   "app_title": "Alarm Monitor",
   "alarm": {
-    "server_url": "http://123.456.7.89:1880/alarm-status",
+    "server_url": "http://192.168.0.30:1880/alarm-status",
     "check_interval": 3,
     "sound_enabled": true,
     "monitoring_enabled": true,

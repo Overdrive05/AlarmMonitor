@@ -1,0 +1,9 @@
+__pycache__/
+build/
+dist/
+dist 1/
+dist 2/
+archive/
+*.bak
+client_gui_new.exe
+version_new.txt
