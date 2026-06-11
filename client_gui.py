@@ -14,7 +14,7 @@ import customtkinter as ctk
 from win10toast import ToastNotifier
 from PIL import Image
 
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 
 VERSION_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/version.txt"
 UPDATER_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/updater.exe"
