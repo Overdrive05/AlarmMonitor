@@ -14,10 +14,14 @@ import customtkinter as ctk
 from win10toast import ToastNotifier
 from PIL import Image
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 
 VERSION_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/version.txt"
 UPDATER_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/updater.exe"
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
+}
 
 def get_base_path():
     if getattr(sys, "frozen", False):
@@ -26,6 +30,11 @@ def get_base_path():
 
 def get_resource_path(filename):
     return os.path.join(get_base_path(), filename)
+
+
+def cache_busted_url(url):
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}_={int(time.time())}"
 
 
 def merge_config(default, custom):
@@ -201,7 +210,11 @@ def check_for_update():
 
     def worker():
         try:
-            response = requests.get(VERSION_URL, timeout=10)
+            response = requests.get(
+                cache_busted_url(VERSION_URL),
+                timeout=10,
+                headers=NO_CACHE_HEADERS
+            )
             response.raise_for_status()
             online_version = response.text.strip()
             app.after(0, lambda version=online_version: apply_update_state(online_version=version))
@@ -215,7 +228,11 @@ def refresh_updater(updater_path):
     temp_path = updater_path + ".new"
 
     try:
-        response = requests.get(UPDATER_URL, timeout=30)
+        response = requests.get(
+            cache_busted_url(UPDATER_URL),
+            timeout=30,
+            headers=NO_CACHE_HEADERS
+        )
         response.raise_for_status()
 
         with open(temp_path, "wb") as f:
@@ -254,7 +271,7 @@ def start_update():
             print("Update Fehler: updater.exe nicht gefunden")
             return
 
-        subprocess.Popen([updater_path], cwd=get_base_path())
+        subprocess.Popen([updater_path, "--pid", str(os.getpid())], cwd=get_base_path())
         app.destroy()
     except Exception as e:
         update_button.configure(

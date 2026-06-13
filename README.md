@@ -136,6 +136,16 @@ Damit der Update-Button funktioniert, muessen bei jedem Release mindestens diese
 
 Fuer Neuinstallationen sollte zusaetzlich ein komplettes ZIP-Paket hochgeladen werden.
 
+Der Update-Button ist der empfohlene Weg. Die App laedt dabei zuerst den neuesten
+`updater.exe`, beendet sich selbst und der Updater ersetzt danach die vorhandene
+`client_gui.exe`.
+
+Wenn `updater.exe` manuell gestartet wird, sollte `client_gui.exe` vorher komplett
+geschlossen sein. Ab Version `1.0.8` wartet der Updater laenger auf das Schliessen
+der App, entfernt alte temporaere Dateien wie `client_gui_new.exe` und laesst bei
+einem fehlgeschlagenen Update keine zweite Startdatei neben der eigentlichen App
+liegen.
+
 ## Hinweis zu Virenscannern
 
 Die EXE-Dateien werden mit PyInstaller gebaut und sind nicht code-signiert. Einige Virenscanner koennen neue oder selten heruntergeladene EXE-Dateien deshalb als unbekannt oder verdaechtig markieren. Lade die App nur aus dem offiziellen GitHub Release herunter und vergleiche bei Bedarf die SHA256-Hashes aus dem Release.
