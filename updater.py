@@ -54,7 +54,10 @@ def cleanup_temp_files(base_path):
     for temp_name in STALE_TEMP_NAMES:
         temp_path = os.path.join(base_path, temp_name)
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except PermissionError:
+                print(f"{temp_name} ist noch in Benutzung und wird uebersprungen.")
 
 
 def wait_for_pid(pid, timeout=30):

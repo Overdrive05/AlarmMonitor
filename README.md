@@ -141,7 +141,7 @@ Der Update-Button ist der empfohlene Weg. Die App laedt dabei zuerst den neueste
 `client_gui.exe`.
 
 Wenn `updater.exe` manuell gestartet wird, sollte `client_gui.exe` vorher komplett
-geschlossen sein. Ab Version `1.0.8` wartet der Updater laenger auf das Schliessen
+geschlossen sein. Ab Version `1.0.9` wartet der Updater laenger auf das Schliessen
 der App, entfernt alte temporaere Dateien wie `client_gui_new.exe` und laesst bei
 einem fehlgeschlagenen Update keine zweite Startdatei neben der eigentlichen App
 liegen.
