@@ -14,7 +14,7 @@ import customtkinter as ctk
 from win10toast import ToastNotifier
 from PIL import Image
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 
 VERSION_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/version.txt"
 UPDATER_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/updater.exe"
@@ -73,7 +73,18 @@ def load_config(config_file="config.json"):
             "appearance_mode": "dark",
             "color_theme": "blue",
             "crest_file": "Icon_oben_rechts.png",
-            "clock_font_family": "Arial"
+            "clock_font_family": "Arial",
+            "station_name": "Feuerwehr Raunheim",
+            "map_title": "Warnkarte",
+            "accent_color": "#2f81f7",
+            "normal_color": "#2fbf71",
+            "alarm_color": "#ff4d4f",
+            "warning_color": "#f5a524",
+            "background_color": "#07111f",
+            "panel_color": "#101b2b",
+            "panel_alt_color": "#142235",
+            "muted_text_color": "#94a3b8",
+            "primary_text_color": "#f8fafc"
         }
     }
 
@@ -107,6 +118,21 @@ MAP_INTERVAL = MAP_CONFIG["update_interval"]
 SOUND_ENABLED = ALARM_CONFIG["sound_enabled"]
 MONITORING_ENABLED = ALARM_CONFIG["monitoring_enabled"]
 last_alarm = False
+
+COLORS = {
+    "bg": UI_CONFIG.get("background_color", "#07111f"),
+    "panel": UI_CONFIG.get("panel_color", "#101b2b"),
+    "panel_alt": UI_CONFIG.get("panel_alt_color", "#142235"),
+    "line": "#223047",
+    "text": UI_CONFIG.get("primary_text_color", "#f8fafc"),
+    "muted": UI_CONFIG.get("muted_text_color", "#94a3b8"),
+    "accent": UI_CONFIG.get("accent_color", "#2f81f7"),
+    "normal": UI_CONFIG.get("normal_color", "#2fbf71"),
+    "alarm": UI_CONFIG.get("alarm_color", "#ff4d4f"),
+    "warning": UI_CONFIG.get("warning_color", "#f5a524"),
+    "button": "#1f6feb",
+    "button_hover": "#388bfd"
+}
 
 toaster = ToastNotifier()
 
@@ -238,16 +264,31 @@ def start_update():
         )
         print("Update Fehler:", e)
 
+
+def style_toggle_button(button, enabled, on_text, off_text):
+    button.configure(
+        text=on_text if enabled else off_text,
+        fg_color=COLORS["normal"] if enabled else COLORS["panel_alt"],
+        hover_color=COLORS["normal"] if enabled else COLORS["line"],
+        text_color="#06131f" if enabled else COLORS["text"]
+    )
+
+
 def toggle_sound():
     global SOUND_ENABLED
     SOUND_ENABLED = not SOUND_ENABLED
-    sound_button.configure(text=f"Ton: {'AN' if SOUND_ENABLED else 'AUS'}")
+    style_toggle_button(sound_button, SOUND_ENABLED, "Ton AN", "Ton AUS")
 
 
 def toggle_monitoring():
     global MONITORING_ENABLED
     MONITORING_ENABLED = not MONITORING_ENABLED
-    monitoring_button.configure(text=f"Überwachung: {'AN' if MONITORING_ENABLED else 'AUS'}")
+    style_toggle_button(
+        monitoring_button,
+        MONITORING_ENABLED,
+        "Überwachung AN",
+        "Überwachung AUS"
+    )
 
 
 def update_clock():
@@ -389,6 +430,35 @@ def update_map():
     app.after(MAP_INTERVAL * 1000, update_map)
 
 
+def set_server_state(text, state):
+    state_colors = {
+        "ok": COLORS["normal"],
+        "error": COLORS["alarm"],
+        "off": COLORS["warning"],
+        "unknown": COLORS["muted"]
+    }
+    color = state_colors.get(state, COLORS["muted"])
+    server_label.configure(text=text, text_color=color)
+    server_chip.configure(text=text.replace("Server: ", ""), fg_color=color, text_color="#06131f")
+
+
+def set_alarm_state(active, text=""):
+    if active:
+        message = text.strip() or "Einsatz"
+        alarm_label.configure(
+            text=f"ALARM AKTIV: {message}",
+            text_color=COLORS["alarm"]
+        )
+        alarm_hint_label.configure(text="Alarmmeldung vom Server", text_color=COLORS["alarm"])
+        alarm_frame.configure(fg_color="#2a1216", border_color=COLORS["alarm"])
+        alarm_badge.configure(text="ALARM", fg_color=COLORS["alarm"], text_color="#21060a")
+    else:
+        alarm_label.configure(text="Kein Alarm", text_color=COLORS["normal"])
+        alarm_hint_label.configure(text="System bereit", text_color=COLORS["muted"])
+        alarm_frame.configure(fg_color=COLORS["panel"], border_color=COLORS["normal"])
+        alarm_badge.configure(text="BEREIT", fg_color=COLORS["normal"], text_color="#06131f")
+
+
 def check_alarm():
     global last_alarm
 
@@ -402,24 +472,12 @@ def check_alarm():
                 current_alarm = data.get("alarm", False)
                 current_text = data.get("text", "")
 
-                app.after(0, lambda: server_label.configure(text="Server: erreichbar"))
+                app.after(0, lambda: set_server_state("Server: erreichbar", "ok"))
 
                 if current_alarm:
-                    app.after(
-                        0,
-                        lambda: alarm_label.configure(
-                            text=f"ALARM AKTIV: {current_text}",
-                            text_color="red"
-                        )
-                    )
+                    app.after(0, lambda text=current_text: set_alarm_state(True, text))
                 else:
-                    app.after(
-                        0,
-                        lambda: alarm_label.configure(
-                            text="Kein Alarm",
-                            text_color="green"
-                        )
-                    )
+                    app.after(0, lambda: set_alarm_state(False))
 
                 if current_alarm and not last_alarm:
                     if SOUND_ENABLED:
@@ -429,17 +487,12 @@ def check_alarm():
                 last_alarm = current_alarm
 
             except Exception as e:
-                app.after(0, lambda: server_label.configure(text="Server: nicht erreichbar"))
-                app.after(
-                    0,
-                    lambda: alarm_label.configure(
-                        text="Status unbekannt",
-                        text_color="orange"
-                    )
-                )
+                app.after(0, lambda: set_server_state("Server: nicht erreichbar", "error"))
+                app.after(0, lambda: set_alarm_state(False))
+                app.after(0, lambda: alarm_hint_label.configure(text="Status unbekannt", text_color=COLORS["warning"]))
                 print("Fehler:", e)
         else:
-            app.after(0, lambda: server_label.configure(text="Überwachung: AUS"))
+            app.after(0, lambda: set_server_state("Überwachung: AUS", "off"))
 
         time.sleep(CHECK_INTERVAL)
 
@@ -449,55 +502,231 @@ ctk.set_default_color_theme(UI_CONFIG["color_theme"])
 
 app = ctk.CTk()
 app.title(APP_TITLE)
-app.state("zoomed")
-
-# MAIN FRAME
-main_frame = ctk.CTkFrame(app)
-main_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-# GRID
-main_frame.grid_rowconfigure(0, weight=4)
-main_frame.grid_rowconfigure(1, weight=2)
-main_frame.grid_columnconfigure(0, weight=3)
-main_frame.grid_columnconfigure(1, weight=2)
-
-# -------- OBEN LINKS: KARTE --------
-map_frame = ctk.CTkFrame(main_frame)
-map_frame.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
-
-map_placeholder = ctk.CTkLabel(
-    map_frame,
-    text="Karte lädt..."
-)
-map_placeholder.pack(expand=True, fill="both", padx=10, pady=10)
-
-# -------- OBEN RECHTS: UHR + WAPPEN --------
-top_right = ctk.CTkFrame(main_frame)
-top_right.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
-
-top_right.grid_rowconfigure(0, weight=1)
-top_right.grid_rowconfigure(1, weight=1)
-top_right.grid_columnconfigure(0, weight=2)
-top_right.grid_columnconfigure(1, weight=1)
+app.configure(fg_color=COLORS["bg"])
+app.minsize(1180, 720)
+try:
+    app.state("zoomed")
+except Exception:
+    app.geometry("1280x780")
 
 clock_font = UI_CONFIG["clock_font_family"]
+station_name = UI_CONFIG.get("station_name", "Feuerwehr Raunheim")
+map_title = UI_CONFIG.get("map_title", "Warnkarte")
 
-clock_frame = ctk.CTkFrame(top_right)
-clock_frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+root_frame = ctk.CTkFrame(app, fg_color=COLORS["bg"], corner_radius=0)
+root_frame.pack(fill="both", expand=True, padx=18, pady=18)
+root_frame.grid_columnconfigure(0, weight=1)
+root_frame.grid_rowconfigure(1, weight=1)
 
-time_label = ctk.CTkLabel(clock_frame, text="00:00:00", font=(clock_font, 44, "bold"))
-time_label.pack(pady=18)
+header_frame = ctk.CTkFrame(
+    root_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["line"]
+)
+header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+header_frame.grid_columnconfigure(0, weight=1)
+header_frame.grid_columnconfigure(1, weight=0)
 
-date_label = ctk.CTkLabel(clock_frame, text="00.00.0000", font=(clock_font, 20))
-date_label.pack()
+title_stack = ctk.CTkFrame(header_frame, fg_color="transparent")
+title_stack.grid(row=0, column=0, sticky="w", padx=18, pady=14)
 
-crest_frame = ctk.CTkFrame(top_right)
-crest_frame.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+title_label = ctk.CTkLabel(
+    title_stack,
+    text=APP_TITLE.upper(),
+    font=(clock_font, 24, "bold"),
+    text_color=COLORS["text"]
+)
+title_label.pack(anchor="w")
+
+station_label = ctk.CTkLabel(
+    title_stack,
+    text=station_name,
+    font=(clock_font, 13),
+    text_color=COLORS["muted"]
+)
+station_label.pack(anchor="w", pady=(2, 0))
+
+header_status = ctk.CTkFrame(header_frame, fg_color="transparent")
+header_status.grid(row=0, column=1, sticky="e", padx=18, pady=14)
+
+version_chip = ctk.CTkLabel(
+    header_status,
+    text=f"Version {APP_VERSION}",
+    width=116,
+    height=30,
+    fg_color=COLORS["panel_alt"],
+    corner_radius=8,
+    font=(clock_font, 12, "bold"),
+    text_color=COLORS["muted"]
+)
+version_chip.pack(side="left", padx=(0, 8))
+
+server_chip = ctk.CTkLabel(
+    header_status,
+    text="unbekannt",
+    width=150,
+    height=30,
+    fg_color=COLORS["muted"],
+    corner_radius=8,
+    font=(clock_font, 12, "bold"),
+    text_color="#06131f"
+)
+server_chip.pack(side="left")
+
+main_frame = ctk.CTkFrame(root_frame, fg_color="transparent")
+main_frame.grid(row=1, column=0, sticky="nsew")
+main_frame.grid_columnconfigure(0, weight=7)
+main_frame.grid_columnconfigure(1, weight=3)
+main_frame.grid_rowconfigure(0, weight=1)
+main_frame.grid_rowconfigure(1, weight=0)
+
+map_frame = ctk.CTkFrame(
+    main_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["line"]
+)
+map_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 14), pady=(0, 14))
+map_frame.grid_columnconfigure(0, weight=1)
+map_frame.grid_rowconfigure(1, weight=1)
+
+map_header = ctk.CTkFrame(map_frame, fg_color="transparent")
+map_header.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 8))
+map_header.grid_columnconfigure(0, weight=1)
+
+map_title_label = ctk.CTkLabel(
+    map_header,
+    text=map_title,
+    font=(clock_font, 16, "bold"),
+    text_color=COLORS["text"]
+)
+map_title_label.grid(row=0, column=0, sticky="w")
+
+map_subtitle_label = ctk.CTkLabel(
+    map_header,
+    text="Automatisch aktualisiert",
+    font=(clock_font, 12),
+    text_color=COLORS["muted"]
+)
+map_subtitle_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+map_canvas = ctk.CTkFrame(map_frame, fg_color=COLORS["panel_alt"], corner_radius=8)
+map_canvas.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 14))
+
+map_placeholder = ctk.CTkLabel(
+    map_canvas,
+    text="Karte lädt...",
+    font=(clock_font, 18, "bold"),
+    text_color=COLORS["muted"]
+)
+map_placeholder.pack(expand=True, fill="both", padx=12, pady=12)
+
+side_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+side_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 14))
+side_frame.grid_columnconfigure(0, weight=1)
+side_frame.grid_rowconfigure(0, weight=0)
+side_frame.grid_rowconfigure(1, weight=1)
+side_frame.grid_rowconfigure(2, weight=1)
+
+clock_frame = ctk.CTkFrame(
+    side_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["line"]
+)
+clock_frame.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+
+time_label = ctk.CTkLabel(
+    clock_frame,
+    text="00:00:00",
+    font=(clock_font, 50, "bold"),
+    text_color=COLORS["text"]
+)
+time_label.pack(anchor="w", padx=18, pady=(16, 0))
+
+date_label = ctk.CTkLabel(
+    clock_frame,
+    text="00.00.0000",
+    font=(clock_font, 18),
+    text_color=COLORS["muted"]
+)
+date_label.pack(anchor="w", padx=20, pady=(0, 16))
+
+weather_frame = ctk.CTkFrame(
+    side_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["line"]
+)
+weather_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 12))
+weather_frame.grid_columnconfigure(0, weight=0)
+weather_frame.grid_columnconfigure(1, weight=1)
+weather_frame.grid_rowconfigure(0, weight=1)
+
+weather_icon = ctk.CTkLabel(
+    weather_frame,
+    text="☀",
+    width=86,
+    font=(clock_font, 52),
+    text_color=COLORS["warning"]
+)
+weather_icon.grid(row=0, column=0, sticky="ns", padx=(18, 8), pady=18)
+
+weather_stack = ctk.CTkFrame(weather_frame, fg_color="transparent")
+weather_stack.grid(row=0, column=1, sticky="nsew", padx=(0, 18), pady=18)
+
+weather_location = ctk.CTkLabel(
+    weather_stack,
+    text=WEATHER_CONFIG["location_name"],
+    font=(clock_font, 14, "bold"),
+    text_color=COLORS["muted"]
+)
+weather_location.pack(anchor="w")
+
+weather_temp = ctk.CTkLabel(
+    weather_stack,
+    text="--°C",
+    font=(clock_font, 42, "bold"),
+    text_color=COLORS["text"]
+)
+weather_temp.pack(anchor="w", pady=(2, 0))
+
+weather_desc = ctk.CTkLabel(
+    weather_stack,
+    text="lädt...",
+    font=(clock_font, 15),
+    text_color=COLORS["muted"]
+)
+weather_desc.pack(anchor="w")
+
+crest_frame = ctk.CTkFrame(
+    side_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["line"]
+)
+crest_frame.grid(row=2, column=0, sticky="nsew")
+crest_frame.grid_columnconfigure(0, weight=1)
+crest_frame.grid_rowconfigure(1, weight=1)
+
+crest_title = ctk.CTkLabel(
+    crest_frame,
+    text="Einheit",
+    font=(clock_font, 14, "bold"),
+    text_color=COLORS["muted"]
+)
+crest_title.grid(row=0, column=0, sticky="w", padx=16, pady=(14, 4))
 
 try:
     crest_path = get_resource_path(UI_CONFIG["crest_file"])
     crest_img_raw = Image.open(crest_path)
-    crest_img_raw.thumbnail((200, 200))
+    crest_img_raw.thumbnail((190, 190))
 
     crest_img = ctk.CTkImage(
         light_image=crest_img_raw,
@@ -507,85 +736,112 @@ try:
 
     crest_label = ctk.CTkLabel(crest_frame, image=crest_img, text="")
     crest_label.image = crest_img
-    crest_label.pack(expand=True)
+    crest_label.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
 
 except Exception as e:
     crest_label = ctk.CTkLabel(
         crest_frame,
         text="Wappen\nnicht gefunden",
-        font=(clock_font, 18)
+        font=(clock_font, 18, "bold"),
+        text_color=COLORS["warning"]
     )
-    crest_label.pack(expand=True)
+    crest_label.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
     print("Wappen Fehler:", e)
 
-weather_frame = ctk.CTkFrame(top_right)
-weather_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=4, pady=4)
+alarm_frame = ctk.CTkFrame(
+    main_frame,
+    fg_color=COLORS["panel"],
+    corner_radius=8,
+    border_width=1,
+    border_color=COLORS["normal"]
+)
+alarm_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+alarm_frame.grid_columnconfigure(0, weight=1)
+alarm_frame.grid_columnconfigure(1, weight=0)
 
-weather_icon = ctk.CTkLabel(weather_frame, text="☀", font=(clock_font, 48))
-weather_icon.pack(pady=5)
+alarm_text_stack = ctk.CTkFrame(alarm_frame, fg_color="transparent")
+alarm_text_stack.grid(row=0, column=0, sticky="ew", padx=18, pady=18)
 
-weather_temp = ctk.CTkLabel(weather_frame, text="--°C", font=(clock_font, 36, "bold"))
-weather_temp.pack()
-
-weather_desc = ctk.CTkLabel(weather_frame, text="lädt...", font=(clock_font, 18))
-weather_desc.pack()
-
-weather_location = ctk.CTkLabel(weather_frame, text=WEATHER_CONFIG["location_name"], font=(clock_font, 14))
-weather_location.pack(pady=5)
-
-# -------- UNTEN: ALARMBEREICH --------
-bottom_frame = ctk.CTkFrame(main_frame)
-bottom_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=6, pady=6)
-
-bottom_frame.grid_rowconfigure(0, weight=1)
-bottom_frame.grid_rowconfigure(1, weight=0)
-bottom_frame.grid_columnconfigure(0, weight=3)
-bottom_frame.grid_columnconfigure(1, weight=1)
-bottom_frame.grid_columnconfigure(2, weight=1)
-bottom_frame.grid_columnconfigure(3, weight=1)
+alarm_badge = ctk.CTkLabel(
+    alarm_text_stack,
+    text="BEREIT",
+    width=92,
+    height=28,
+    fg_color=COLORS["normal"],
+    corner_radius=8,
+    font=(clock_font, 12, "bold"),
+    text_color="#06131f"
+)
+alarm_badge.pack(anchor="w")
 
 alarm_label = ctk.CTkLabel(
-    bottom_frame,
-    text="KEIN ALARM",
-    font=(clock_font, 42, "bold")
+    alarm_text_stack,
+    text="Kein Alarm",
+    font=(clock_font, 42, "bold"),
+    text_color=COLORS["normal"]
 )
-alarm_label.grid(row=0, column=0, columnspan=4, pady=35)
+alarm_label.pack(anchor="w", pady=(6, 0))
+
+alarm_hint_label = ctk.CTkLabel(
+    alarm_text_stack,
+    text="System bereit",
+    font=(clock_font, 14),
+    text_color=COLORS["muted"]
+)
+alarm_hint_label.pack(anchor="w")
+
+control_frame = ctk.CTkFrame(alarm_frame, fg_color="transparent")
+control_frame.grid(row=0, column=1, sticky="e", padx=18, pady=18)
 
 server_label = ctk.CTkLabel(
-    bottom_frame,
+    control_frame,
     text="Server: unbekannt",
-    font=(clock_font, 16)
+    font=(clock_font, 14, "bold"),
+    text_color=COLORS["muted"]
 )
-server_label.grid(row=1, column=0, sticky="sw", padx=15, pady=10)
+server_label.grid(row=0, column=0, columnspan=3, sticky="e", pady=(0, 10))
 
 sound_button = ctk.CTkButton(
-    bottom_frame,
-    text=f"Ton: {'AN' if SOUND_ENABLED else 'AUS'}",
-    width=120,
+    control_frame,
+    text="Ton AN",
+    width=118,
+    height=38,
+    corner_radius=8,
     command=toggle_sound
 )
-sound_button.grid(row=1, column=1, sticky="se", padx=8, pady=10)
+sound_button.grid(row=1, column=0, sticky="e", padx=(0, 8))
 
 monitoring_button = ctk.CTkButton(
-    bottom_frame,
-    text=f"Überwachung: {'AN' if MONITORING_ENABLED else 'AUS'}",
-    width=150,
+    control_frame,
+    text="Überwachung AN",
+    width=156,
+    height=38,
+    corner_radius=8,
     command=toggle_monitoring
 )
-monitoring_button.grid(row=1, column=2, sticky="se", padx=15, pady=10)
+monitoring_button.grid(row=1, column=1, sticky="e", padx=(0, 8))
 
 update_button = ctk.CTkButton(
-    bottom_frame,
+    control_frame,
     text="Update prüfen",
     width=130,
+    height=38,
+    corner_radius=8,
+    fg_color=COLORS["button"],
+    hover_color=COLORS["button_hover"],
     command=check_for_update,
     state="normal"
 )
-update_button.grid(row=1, column=3, sticky="se", padx=15, pady=10)
+update_button.grid(row=1, column=2, sticky="e")
+
+style_toggle_button(sound_button, SOUND_ENABLED, "Ton AN", "Ton AUS")
+style_toggle_button(monitoring_button, MONITORING_ENABLED, "Überwachung AN", "Überwachung AUS")
+set_alarm_state(False)
+set_server_state("Server: unbekannt", "unknown")
 
 update_clock()
-update_weather()
-update_map()
+app.after(100, update_weather)
+app.after(250, update_map)
 
 thread = threading.Thread(target=check_alarm, daemon=True)
 thread.start()

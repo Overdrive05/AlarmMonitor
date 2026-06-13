@@ -25,6 +25,17 @@
     "appearance_mode": "dark",
     "color_theme": "blue",
     "crest_file": "Icon_oben_rechts.png",
-    "clock_font_family": "Arial"
+    "clock_font_family": "Arial",
+    "station_name": "Feuerwehr Raunheim",
+    "map_title": "Warnkarte",
+    "accent_color": "#2f81f7",
+    "normal_color": "#2fbf71",
+    "alarm_color": "#ff4d4f",
+    "warning_color": "#f5a524",
+    "background_color": "#07111f",
+    "panel_color": "#101b2b",
+    "panel_alt_color": "#142235",
+    "muted_text_color": "#94a3b8",
+    "primary_text_color": "#f8fafc"
   }
 }
