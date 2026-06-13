@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import hashlib
 import threading
 import time
 from datetime import datetime
@@ -14,9 +15,10 @@ import customtkinter as ctk
 from win10toast import ToastNotifier
 from PIL import Image
 
-APP_VERSION = "1.0.10"
+APP_VERSION = "1.0.11"
 
 VERSION_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/version.txt"
+MANIFEST_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/manifest.json"
 UPDATER_URL = "https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/updater.exe"
 NO_CACHE_HEADERS = {
     "Cache-Control": "no-cache",
@@ -127,6 +129,9 @@ MAP_INTERVAL = MAP_CONFIG["update_interval"]
 SOUND_ENABLED = ALARM_CONFIG["sound_enabled"]
 MONITORING_ENABLED = ALARM_CONFIG["monitoring_enabled"]
 last_alarm = False
+alarm_active = False
+update_status = "idle"
+update_available_version = None
 
 COLORS = {
     "bg": UI_CONFIG.get("background_color", "#07111f"),
@@ -173,40 +178,126 @@ def parse_version(version):
         return ()
 
 
-def apply_update_state(online_version=None, error=None):
-    if error:
+def hash_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().upper()
+
+
+def fetch_manifest():
+    response = requests.get(
+        cache_busted_url(MANIFEST_URL),
+        timeout=10,
+        headers=NO_CACHE_HEADERS
+    )
+    response.raise_for_status()
+    manifest = response.json()
+
+    if not isinstance(manifest, dict):
+        raise RuntimeError("Manifest ist ungueltig.")
+
+    return manifest
+
+
+def get_manifest_file(manifest, filename):
+    file_info = manifest.get("files", {}).get(filename)
+
+    if not isinstance(file_info, dict):
+        raise RuntimeError(f"{filename} fehlt im Manifest.")
+
+    return file_info
+
+
+def validate_download(path, file_info, min_size, label):
+    expected_size = file_info.get("size")
+    expected_sha256 = str(file_info.get("sha256", "")).upper()
+    actual_size = os.path.getsize(path)
+
+    if actual_size < min_size:
+        raise RuntimeError(f"{label} ist unerwartet klein.")
+
+    if expected_size is not None and actual_size != int(expected_size):
+        raise RuntimeError(f"{label} hat eine falsche Dateigroesse.")
+
+    if expected_sha256 and hash_file(path) != expected_sha256:
+        raise RuntimeError(f"{label} hat einen falschen SHA256-Hash.")
+
+    with open(path, "rb") as f:
+        if f.read(2) != b"MZ":
+            raise RuntimeError(f"{label} ist keine Windows-EXE.")
+
+
+def refresh_update_button():
+    if "update_button" not in globals():
+        return
+
+    if update_status == "running":
+        update_button.configure(text="Update laeuft...", state="disabled")
+        return
+
+    if alarm_active:
+        update_button.configure(text="Update gesperrt", state="disabled")
+        return
+
+    if update_status == "checking":
+        update_button.configure(text="Pruefe...", state="disabled")
+    elif update_status == "available" and update_available_version:
         update_button.configure(
-            text="Update prüfen",
+            text=f"Update {update_available_version}",
+            state="normal",
+            command=start_update
+        )
+    elif update_status == "current":
+        update_button.configure(text="Aktuell", state="disabled")
+    else:
+        update_button.configure(
+            text="Update pruefen",
             state="normal",
             command=check_for_update
         )
-        print("Update prüfen Fehler:", error)
+
+
+def apply_update_state(online_version=None, error=None):
+    global update_status, update_available_version
+
+    if error:
+        update_status = "error"
+        update_available_version = None
+        refresh_update_button()
+        print("Update pruefen Fehler:", error)
         return
 
     online_parsed = parse_version(online_version)
     local_parsed = parse_version(APP_VERSION)
 
     if not online_parsed or not local_parsed:
-        update_button.configure(
-            text="Update prüfen",
-            state="normal",
-            command=check_for_update
-        )
-        print("Update prüfen Fehler: ungültige Versionsnummer")
+        update_status = "error"
+        update_available_version = None
+        refresh_update_button()
+        print("Update pruefen Fehler: ungueltige Versionsnummer")
         return
 
     if online_parsed > local_parsed:
-        update_button.configure(
-            text=f"Update {online_version}",
-            state="normal",
-            command=start_update
-        )
+        update_status = "available"
+        update_available_version = online_version
     else:
-        update_button.configure(text="Aktuell", state="disabled")
+        update_status = "current"
+        update_available_version = None
+
+    refresh_update_button()
 
 
 def check_for_update():
-    update_button.configure(text="Prüfe...", state="disabled")
+    global update_status
+
+    if alarm_active:
+        refresh_update_button()
+        return
+
+    update_status = "checking"
+    refresh_update_button()
 
     def worker():
         try:
@@ -228,6 +319,9 @@ def refresh_updater(updater_path):
     temp_path = updater_path + ".new"
 
     try:
+        manifest = fetch_manifest()
+        updater_info = get_manifest_file(manifest, "updater.exe")
+
         response = requests.get(
             cache_busted_url(UPDATER_URL),
             timeout=30,
@@ -238,47 +332,43 @@ def refresh_updater(updater_path):
         with open(temp_path, "wb") as f:
             f.write(response.content)
 
-        if os.path.getsize(temp_path) < 1_000_000:
-            raise RuntimeError("Heruntergeladener Updater ist unerwartet klein.")
-
-        with open(temp_path, "rb") as f:
-            if f.read(2) != b"MZ":
-                raise RuntimeError("Heruntergeladener Updater ist keine Windows-EXE.")
-
+        validate_download(temp_path, updater_info, 1_000_000, "Heruntergeladener Updater")
         os.replace(temp_path, updater_path)
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-        print("Updater aktualisieren Fehler:", e)
+        raise RuntimeError(f"Updater aktualisieren Fehler: {e}") from e
 
 
 def start_update():
+    global update_status
+
     try:
+        if alarm_active:
+            refresh_update_button()
+            print("Update blockiert: Alarm aktiv")
+            return
+
         updater_path = get_resource_path("updater.exe")
 
-        update_button.configure(text="Update läuft...", state="disabled")
+        update_status = "running"
+        refresh_update_button()
         app.update_idletasks()
 
         refresh_updater(updater_path)
 
         if not os.path.exists(updater_path):
-            update_button.configure(
-                text="Updater fehlt",
-                state="normal",
-                command=check_for_update
-            )
+            update_status = "error"
+            refresh_update_button()
             print("Update Fehler: updater.exe nicht gefunden")
             return
 
         subprocess.Popen([updater_path, "--pid", str(os.getpid())], cwd=get_base_path())
         app.destroy()
     except Exception as e:
-        update_button.configure(
-            text="Update Fehler",
-            state="normal",
-            command=check_for_update
-        )
+        update_status = "error"
+        refresh_update_button()
         print("Update Fehler:", e)
 
 
@@ -460,6 +550,10 @@ def set_server_state(text, state):
 
 
 def set_alarm_state(active, text=""):
+    global alarm_active
+
+    alarm_active = active
+
     if active:
         message = text.strip() or "Einsatz"
         alarm_label.configure(
@@ -474,6 +568,8 @@ def set_alarm_state(active, text=""):
         alarm_hint_label.configure(text="System bereit", text_color=COLORS["muted"])
         alarm_frame.configure(fg_color=COLORS["panel"], border_color=COLORS["normal"])
         alarm_badge.configure(text="BEREIT", fg_color=COLORS["normal"], text_color="#06131f")
+
+    refresh_update_button()
 
 
 def check_alarm():

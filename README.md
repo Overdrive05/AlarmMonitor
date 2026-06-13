@@ -19,6 +19,7 @@ Diese Dateien muessen zusammen im selben Ordner liegen:
 - `alarm.wav`
 - `Icon_oben_rechts.png`
 - `version.txt`
+- `manifest.json`
 
 ## Anpassen
 
@@ -125,12 +126,14 @@ Wenn kein Alarm aktiv ist:
 Die App prueft das neueste GitHub Release ueber:
 
 - `https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/version.txt`
+- `https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/manifest.json`
 - `https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/client_gui.exe`
 - `https://github.com/Overdrive05/AlarmMonitor/releases/latest/download/updater.exe`
 
 Damit der Update-Button funktioniert, muessen bei jedem Release mindestens diese Assets hochgeladen werden:
 
 - `version.txt`
+- `manifest.json`
 - `client_gui.exe`
 - `updater.exe`
 
@@ -145,6 +148,12 @@ geschlossen sein. Ab Version `1.0.9` wartet der Updater laenger auf das Schliess
 der App, entfernt alte temporaere Dateien wie `client_gui_new.exe` und laesst bei
 einem fehlgeschlagenen Update keine zweite Startdatei neben der eigentlichen App
 liegen.
+
+Ab Version `1.0.11` wird jedes Update gegen `manifest.json` geprueft. Der Updater
+vergleicht Dateigroesse und SHA256-Hash, ersetzt die EXE nur bei passendem Manifest
+und erstellt vorher ein temporaeres Backup. Wenn die neue App direkt nach dem
+Update nicht stabil startet, wird automatisch auf die vorherige EXE zurueckgerollt.
+Waehrend ein Alarm aktiv ist, bleibt der Update-Button gesperrt.
 
 ## Hinweis zu Virenscannern
 
